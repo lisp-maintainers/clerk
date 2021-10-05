@@ -101,6 +101,6 @@ Pretty self-explanatory. The idea is that if you type the day of the week, clerk
 
 ## Maintenance
 
-Clerk was written by Petko Tsikov
+Clerk was written by [Petko Tsikov](https://github.com/tsikov/clerk)
 
-It is currently maintained by Ben McGunigle (bnmcgn at gmail dot com)
+It is currently maintained by Ben McGunigle (bnmcgn at gmail dot com) and the team at lisp-maintainers.
