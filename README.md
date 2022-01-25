@@ -13,7 +13,7 @@ A cron-like scheduler with sane DSL
      every 1.month (send-report (compose-monthly-report)))
 ```
 
-If you want to see it with your eyes, make sure to load the following code:
+If you want to see it with your own eyes, make sure to load the following code:
 
 ```
 (defun write-to-file (msg file)
@@ -49,21 +49,21 @@ Colour
 
 ### Job FUNCTION
 
-The original idea was for users to use the library to execute some sort of execution of a configuration file. However you can use the job creation process programatically with the underlying function `job-fn`. E.g.:
+The original idea was for users to use the library to execute some sort of execution of a configuration file. However you can use the job creation process programatically with the underlying function `job-function`. E.g.:
 
 ```
 (defparameter *query-interval* 5)
-(job-fn (format nil "Query the API every ~A seconds" *query-interval*)
-        'every
-        `(,*query-interval* seconds)
-        #'query-api-fn)
+(job-function
+  #'query-api-fn
+  :name (format nil "Query the API every ~A seconds" *query-interval*)
+  :every `(,*query-interval* seconds))
 ```
 
 As you can see, you have to provide a function (either anonymous function or a function symbol) as the last argument.
 
 ## Installation and usage
 
-Clone the repo inside `quicklisp/local-projects` and do `(ql:quicklisp :clerk)` in your REPL.
+Clerk is available in quicklisp: run `(ql:quicklisp 'clerk)` in your REPL to install.
 
 Make sure your jobs are loaded before executing `(clerk:start)`. The jobs reside inside `clerk:*jobs*`, but you can also type `(clerk:calendar)` to see a list of all scheduled and running jobs. 
 
@@ -77,7 +77,13 @@ A `one-time` job is fired once and then it is removed from the jobs queue. An ex
 (job "Extraordinary event" in 5.days (send-mail "Don't forget X"))
 ```
 
-You can use any word instead of `in`.
+Sometimes with a continuous job you want an initial delay that is different than the repetition interval:
+
+``` 
+(job "Do it lots, after a while" after 3.days every 2.seconds (send-marketing-email))
+```
+
+`after` can be used interchangeably with `in`.
 
 ### Intervals
 

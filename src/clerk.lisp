@@ -7,7 +7,8 @@
            #:job-fn
            #:start
            #:stop
-           #:calendar))
+           #:calendar
+           #:job-function))
 (in-package #:clerk)
 
 (defparameter *jobs* nil
@@ -16,45 +17,69 @@
 
 (defclass job ()
   ((name :initarg :name :reader name)
-   (interval :initarg :interval :reader interval)
+   (delay :initarg :delay :reader delay)
    (fire-time :initarg :fire-time :accessor fire-time)
-   (body :initarg :body :reader body)))
+   (payload :initarg :payload :reader payload)))
 
-(defclass continuous-job (job) ())
+(defclass continuous-job (job)
+  ((interval :initarg :interval :reader interval)))
 (defclass one-time-job (job) ())
 
 (defmethod initialize-instance :after ((job job) &key)
   (let ((fire-time (clerk.time:timejump (get-universal-time)
-                                        (interval job))))    
+                                        (delay job))))
     (setf (fire-time job)
           fire-time)))
 
-(defun continuous-p (type)
-  "Only interval declared with `every` are considered continuous"
-  ;; string= will do package agnostic symbol comparison
-  (string= type 'every))
+(defun job-function (func &key name in every after)
+  (when (and in after)
+    ;;In and after are synonyms
+    (error "Only one of :in or :after should be used"))
+  ;; If neither in or after is set, we use every for the initial delay
+  (let ((delay (or in after every)))
+    (add-to-jobs-queue
+     (if every
+         (make-instance 'continuous-job
+                        :name name
+                        :delay delay
+                        :interval every
+                        :payload func)
+         (make-instance 'one-time-job
+                        :name name
+                        :delay delay
+                        :payload func)))))
 
-(defun make-job (name type interval body)
-  (let ((job-class (if (continuous-p type)
-                       'continuous-job
-                       'one-time-job)))
-    (make-instance job-class
-                   :name name
-                   :interval interval
-                   :body body)))
-
-(defmacro job (name type interval body)
-  `(add-to-jobs-queue ,name ',type ',interval
-                       (lambda () ,body)))
-
+;;Deprecated. Use job-function.
 (defun job-fn (name type interval fn)
-  (add-to-jobs-queue name type interval fn))
+  (let ((every (when (string= :every type) t)))
+    (job-function fn :name name :in (unless every interval) :every (when every interval))))
 
-(defun add-to-jobs-queue (name type interval fn)
-  (let ((job (make-job name type interval fn)))
-    (push job *jobs*)
-    (sort *jobs* #'< :key #'fire-time)
-    job))
+(defun process-pairs (pairs)
+  (unless (evenp (length pairs))
+    (error "Need an even number of types and intervals"))
+  (unless (< 0 (length pairs))
+    (error "No interval provided"))
+  (loop for (type interval) on pairs by #'cddr
+        collect (cond
+                  ((string= :every type) :every)
+                  ((string= :in type) :in)
+                  ((string= :after type) :after)
+                  (t (error "Not a recognized interval type")))
+        collect interval))
+
+(defmacro job (name &rest type/interval-pairs-and-body)
+  (let ((pairs (process-pairs (butlast type/interval-pairs-and-body)))
+        (body (car (last type/interval-pairs-and-body))))
+    `(job-function
+      (lambda () ,body)
+      :name ,name
+      :after ',(or (getf pairs :in) (getf pairs :after))
+      :every ',(getf pairs :every))))
+
+(defun add-to-jobs-queue (job)
+  (push job *jobs*)
+  (sort *jobs* #'< :key #'fire-time)
+  job)
 
 (defun empty-jobs-queue ()
   (setf *jobs* nil))
@@ -64,13 +89,18 @@
   (<= (fire-time job) (get-universal-time)))
 
 (defmethod fire-job ((job job))
-  (bt:make-thread (body job) :name (name job)))
+  (bt:make-thread (payload job) :name (name job)))
 
 (defmethod fire-job :before ((job continuous-job))
   "Create the next job in the job queue when firing continuous
 jobs."
-  (with-slots (name interval body) job
-    (add-to-jobs-queue name 'every interval body)))
+  (with-slots (name interval payload) job
+    (add-to-jobs-queue
+     (make-instance 'continuous-job
+                    :name name
+                    :delay interval
+                    :interval interval
+                    :payload payload))))
 
 (defun fire-job-if-needed ()
   (when (and *jobs* (fire-job-p (car *jobs*)))
@@ -95,10 +125,17 @@ jobs."
   (bt:destroy-thread *main-thread*)
   (setf *main-thread* nil))
 
+(defgeneric print-job (job stream))
+(defmethod print-job ((job job) stream)
+  (with-slots (name delay fire-time) job
+    (format stream "~A - ~A - ~A~%" name delay fire-time)))
+(defmethod print-job ((job continuous-job) stream)
+  (with-slots (name delay interval fire-time) job
+    (format stream "~A - ~A ~A - ~A~%" name delay interval fire-time)))
+
 (defun calendar (&optional (stream *standard-output*))
   "Print the scheduled jobs"
   (format stream "JOBS:~%")
-  (loop for job in *jobs*
-     do (with-slots (name interval fire-time) job
-          (format stream "~A - ~A - ~A~%" name interval fire-time))))
+  (dolist (job *jobs*)
+    (print-job job stream)))
 

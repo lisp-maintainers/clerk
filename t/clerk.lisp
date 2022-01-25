@@ -7,17 +7,15 @@
 
 (subtest "package clerk.test"
   (subtest "function (make-job"
-    (is (type-of (clerk::make-job "Friendly job"
-                                    'every
-                                    '5.minutes
-                                    '(print "Hi!")))
+    (is (type-of (clerk::job-function (lambda () (print "Hi!"))
+                                      :name "Friendly job"
+                                      :every '5.minutes))
         'continuous-job
         "Can make continuous job"
         :test #'string=)
-    (is (type-of (clerk::make-job "Friendly job"
-                                    'in
-                                    '1.day
-                                    '(print "Hi!")))
+    (is (type-of (clerk:job-function (lambda () (print "Hi!"))
+                                     :name "Friendly job"
+                                     :in '1.day))
         'one-time-job
         "Can make one-time job"
         :test #'string=))
@@ -39,19 +37,18 @@
           "Orders jobs by time of firing."
           :test #'string=)))
 
-  (subtest "function (job-fn"
+  (subtest "function (job-function"
     (clerk:empty-jobs-queue)
-    (clerk:job-fn "Test job-fn" 'every '1.minute #'(lambda () (print "Fire!")))
+    (clerk:job-function #'(lambda () (print "Fire!")) :name "Test job-function" :every '1.minute)
     (with-slots (clerk::name) (first clerk:*jobs*)
-      (is clerk::name "Test job-fn"
+      (is clerk::name "Test job-function"
           "Adds the job to the job queue."
           :test #'string=))
-    (clerk:job-fn "Test job-fn (interval as a list)"
-                  'in
-                  (list 5 'seconds)
-                  #'(lambda () (print "Fire!")))
+    (clerk:job-function #'(lambda () (print "Fire!"))
+                        :name "Test job-function (interval as a list)"
+                  :in (list 5 'seconds))
     (with-slots (clerk::name) (first clerk:*jobs*)
-      (is clerk::name "Test job-fn (interval as a list)"
+      (is clerk::name "Test job-function (interval as a list)"
           "Adds the job to the job queue. Can decipher interval as a list"
           :test #'string=)))
   
@@ -59,11 +56,11 @@
   (subtest "function (fire-job-p"
     (ok (not (clerk::fire-job-p
               (make-instance 'clerk:job
-                             :interval '1.minute)))
+                             :delay '1.minute)))
         "Job is not fired before it's time")
     (ok (clerk::fire-job-p
          (make-instance 'clerk:job
-                        :interval '-1.second))
+                        :delay '-1.second))
         "Job is fired when the time comes"))
 
   (clerk:empty-jobs-queue)
