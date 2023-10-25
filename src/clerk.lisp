@@ -68,6 +68,8 @@
         collect interval))
 
 (defmacro job (name &rest type/interval-pairs-and-body)
+  (unless (stringp name)
+    "Job name string must be supplied")
   (let ((pairs (process-pairs (butlast type/interval-pairs-and-body)))
         (body (car (last type/interval-pairs-and-body))))
     `(job-function
