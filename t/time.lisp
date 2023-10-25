@@ -20,7 +20,7 @@
       120
       "Can convert numbered interval to seconds")
   (is (clerk.time::interval->seconds '1.hour)
-      360
+      3600
       "Can convert numbered interval to seconds")
   (is (clerk.time::interval->seconds (list 1 'minute))
       60
